@@ -1,0 +1,15 @@
+pandas>=2.0
+rapidfuzz>=3.0
+
+# needed only for the Airflow phase (see README "Running with Airflow") --
+# install these into a SEPARATE virtual environment from the one above.
+# Airflow pins many of its own dependency versions and running it
+# alongside an unrelated project's venv is asking for a resolver conflict.
+#
+# pip install "apache-airflow==<version>" --constraint \
+#   "https://raw.githubusercontent.com/apache/airflow/constraints-<version>/constraints-<python-version>.txt"
+#
+# see README for the full command with variables filled in
+
+# added in later phases of the roadmap:
+# dbt-snowflake>=1.7

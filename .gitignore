@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+.venv/
+.venv-airflow/
+venv/
+
+# Airflow's own runtime files if AIRFLOW_HOME ever points inside the repo
+airflow.cfg
+airflow.db
+logs/
+webserver_config.py
+
+# raw source data is pulled fresh from the city's open data portal --
+# don't commit large CSV exports to the repo
+data/raw/*.csv
+data/processed/*.csv
+
+.DS_Store

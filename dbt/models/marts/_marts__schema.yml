@@ -1,0 +1,47 @@
+version: 2
+
+models:
+  - name: dim_business
+    description: One row per resolved business from Chicago's Business Licenses dataset.
+    columns:
+      - name: business_key
+        tests: [not_null, unique]
+      - name: account_number
+        tests: [not_null]
+
+  - name: dim_location
+    description: >
+      One row per unique normalized (address, zip) seen in either
+      Business Licenses or Food Inspections.
+    columns:
+      - name: location_key
+        tests: [not_null, unique]
+
+  - name: fact_license_status
+    description: >
+      One row per food inspection record run through the entity-resolution
+      matcher. business_key is null only when the matcher found zero
+      candidate businesses in that ZIP code -- see model SQL comments.
+    columns:
+      - name: inspection_id
+        tests: [not_null, unique]
+      - name: business_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_business')
+                field: business_key
+              config:
+                where: "business_key is not null"
+      - name: location_key
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_location')
+                field: location_key
+      - name: match_status
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["matched", "review", "unmatched"]

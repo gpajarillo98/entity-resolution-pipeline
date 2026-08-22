@@ -1,0 +1,43 @@
+version: 2
+
+models:
+  - name: stg_business_licenses
+    description: >
+      One row per business (account + site number), from the "current
+      active, last 2 years" export of Chicago's Business Licenses dataset.
+      Renewal history has already been collapsed to the most recent record
+      per business in transform/clean.py before this ever reaches dbt.
+    columns:
+      - name: account_number
+        tests: [not_null]
+      - name: site_number
+        tests: [not_null]
+      - name: license_number
+        tests: [not_null]
+
+  - name: stg_food_inspections
+    description: >
+      One row per (license #, DBA name) pair from Chicago's Food
+      Inspections dataset, keeping the most recent inspection when a
+      business was inspected multiple times. Institutional facility types
+      (schools, daycares, hospitals, long-term care) are excluded by
+      default upstream -- see NON_RETAIL_FACILITY_TYPES in transform/clean.py.
+    columns:
+      - name: inspection_id
+        tests: [not_null, unique]
+
+  - name: stg_match_results
+    description: >
+      Output of the fuzzy-matching engine (transform/match.py): each food
+      inspection record matched against its best-candidate business
+      license, blocked by ZIP code. See the project README's Results
+      section for the full v1->v3 tuning history and validated accuracy
+      (97.03% precision / 92.27% recall on the full dataset).
+    columns:
+      - name: inspection_id
+        tests: [not_null, unique]
+      - name: match_status
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["matched", "review", "unmatched"]

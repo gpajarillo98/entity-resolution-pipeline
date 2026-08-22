@@ -152,6 +152,75 @@ into tasks instead of one script: if `run_matching` fails, you can see
 exactly that, re-run just that task, and the two upstream `clean` tasks
 don't re-run unnecessarily.
 
+## Running with dbt
+
+The dbt project lives in `dbt/` and builds a small star schema on top of
+the pipeline's output: `dim_business`, `dim_location`, and
+`fact_license_status` (grain: one row per food inspection record run
+through the matcher).
+
+**Design note on `dim_location`:** it's built from a union of addresses
+from *both* sources, not just Business Licenses — `fact_license_status`
+needs a `location_key` for every inspection record, including the ones
+that never matched a license. Verified against the real dataset before
+writing any SQL: no duplicate keys, no fan-out on any join (43,506
+licenses + 13,275 inspections → 46,446 distinct locations, exact grain
+preserved through every join in `fact_license_status`).
+
+**Design note on `business_key`:** it's populated for `review` and
+`unmatched` rows too, not just `matched` — it points at whatever the
+matcher's best candidate was, even below threshold, which is useful for
+anyone triaging the review queue by hand. It's only null for the rare
+case where the matcher found zero candidates in that ZIP code at all.
+`match_status` is the field to actually filter/trust on.
+
+### Setup
+
+dbt targets **DuckDB** by default for local development — free, no
+account, no credentials, no network dependency beyond the initial
+install. A `prod` target for Snowflake is already defined in
+`profiles.yml.example`, ready for once the warehouse-loading phase of
+the roadmap is done; the model SQL itself needs no changes to run
+against either (see the `ref()` → `source()` swap noted in each staging
+model's comments once Snowflake is live).
+
+```bash
+# separate venv again, same reasoning as the Airflow section
+python -m venv .venv-dbt && source .venv-dbt/bin/activate
+pip install dbt-core dbt-duckdb
+
+mkdir -p ~/.dbt
+cp dbt/profiles.yml.example ~/.dbt/profiles.yml
+
+cd dbt
+dbt deps          # installs dbt_utils, used for surrogate keys
+```
+
+**The seeds** (`dbt/seeds/*.csv`) are outputs of `run_pipeline.py`, not
+checked into the repo (see `.gitignore` — they're 40k+ rows each and
+regenerate from source data anyway). Generate them first:
+
+```bash
+cd ..                         # back to project root
+python run_pipeline.py        # writes data/processed/*.csv
+cp data/processed/business_licenses_clean.csv dbt/seeds/
+cp data/processed/food_inspections_clean.csv dbt/seeds/
+cp data/processed/match_results.csv dbt/seeds/
+cd dbt
+```
+
+Then build and test:
+
+```bash
+dbt seed           # loads the three CSVs into DuckDB
+dbt run            # builds stg_* views and dim_/fact_ tables
+dbt test           # runs the not_null / unique / relationships tests
+```
+
+`dbt docs generate && dbt docs serve` opens an interactive lineage graph
+and column-level documentation in your browser — worth doing once, just
+to see the model dependency graph laid out visually.
+
 ## Roadmap
 
 - [x] Extract + clean both sources
@@ -164,7 +233,9 @@ don't re-run unnecessarily.
 - [x] Confirm the fix holds at full scale, not just on a sample
 - [x] Orchestrate with Airflow (scheduled DAG, retries, logging, a
       precision data-quality gate) — see "Running with Airflow" above
-- [ ] Model matched output into a star schema with dbt
-      (`dim_business`, `dim_location`, `fact_license_status`)
-- [ ] Load into Snowflake
+- [x] Model matched output into a star schema with dbt
+      (`dim_business`, `dim_location`, `fact_license_status`, with data
+      tests) — see "Running with dbt" above
+- [ ] Load into Snowflake (dbt is already wired for it — see
+      `profiles.yml.example`)
 - [ ] Lightweight dashboard on match rate / review queue

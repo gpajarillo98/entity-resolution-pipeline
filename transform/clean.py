@@ -73,6 +73,19 @@ def clean_business_licenses(df: pd.DataFrame) -> pd.DataFrame:
     df["address_norm"] = df["ADDRESS"].apply(normalize_address)
     df["zip"] = df["ZIP CODE"].astype(str).str.strip().str[:5]
 
+    # A small number of businesses are legally registered with literal
+    # quote characters in their name (e.g. `"ALSOL, INC."` -- the quotes
+    # are part of the actual registered name in the source data, not a
+    # formatting artifact). That's valid to keep in name_norm/legal_name_norm
+    # (normalize_name already strips all punctuation there), but the RAW
+    # display columns below keep it verbatim -- which is technically valid
+    # CSV once escaped, but trips up some strict CSV parsers (found this
+    # loading the dbt seed into DuckDB). Since these raw columns are only
+    # ever used for display, not matching, stripping stray quote characters
+    # here is safe and has zero effect on match scores.
+    for col in ("LEGAL NAME", "DOING BUSINESS AS NAME", "ADDRESS"):
+        df[col] = df[col].astype(str).str.replace('"', "", regex=False)
+
     keep_cols = [
         "ACCOUNT NUMBER", "SITE NUMBER", "LICENSE NUMBER", "LEGAL NAME",
         "DOING BUSINESS AS NAME", "name_norm", "legal_name_norm",
@@ -123,6 +136,12 @@ def clean_food_inspections(df: pd.DataFrame, exclude_facility_types: bool = True
     df["aka_name_norm"] = df["AKA Name"].apply(normalize_name)
     df["address_norm"] = df["Address"].apply(normalize_address)
     df["zip"] = df["Zip"].astype(str).str.strip().str[:5]
+
+    # Same defensive fix as clean_business_licenses -- strip stray literal
+    # quote characters from raw display columns (harmless to matching,
+    # since name_norm/aka_name_norm already strip all punctuation).
+    for col in ("DBA Name", "AKA Name", "Address"):
+        df[col] = df[col].astype(str).str.replace('"', "", regex=False)
 
     keep_cols = [
         "Inspection ID", "License #", "DBA Name", "AKA Name",

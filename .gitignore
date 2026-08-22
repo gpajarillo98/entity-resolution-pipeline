@@ -15,4 +15,13 @@ webserver_config.py
 data/raw/*.csv
 data/processed/*.csv
 
+# dbt seeds are copies of data/processed/*.csv -- same reasoning, and
+# they regenerate from `python run_pipeline.py` + a copy step (see
+# README "Running with dbt")
+dbt/seeds/*.csv
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/*.duckdb
+
 .DS_Store

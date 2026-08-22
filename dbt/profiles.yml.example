@@ -1,0 +1,37 @@
+# Copy this to ~/.dbt/profiles.yml (dbt looks there by default, NOT inside
+# the project folder -- that's intentional, since profiles.yml often holds
+# credentials and shouldn't live in version control).
+#
+# Two targets are defined on purpose:
+#   dev     -- DuckDB, a free embedded database. No account, no credentials,
+#              no network required. This is what to use RIGHT NOW to build
+#              and test the models below.
+#   prod    -- Snowflake, for once the warehouse-loading phase of the
+#              roadmap is done. Same model SQL runs against both in almost
+#              all cases -- star-schema joins and CASE statements are
+#              standard SQL. The handful of places a function might differ
+#              between DuckDB and Snowflake are called out in comments in
+#              the model files.
+#
+# Run `dbt run` (uses the default target, dev) to build against DuckDB.
+# Run `dbt run --target prod` once Snowflake credentials are filled in below.
+
+entity_resolution:
+  target: dev
+  outputs:
+
+    dev:
+      type: duckdb
+      path: 'entity_resolution_dev.duckdb'
+      threads: 4
+
+    prod:
+      type: snowflake
+      account: "<your_account_identifier>"      # e.g. xy12345.us-east-1
+      user: "<your_username>"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"   # never hardcode this
+      role: "<your_role>"
+      database: ENTITY_RESOLUTION
+      warehouse: "<your_warehouse>"
+      schema: ANALYTICS
+      threads: 4

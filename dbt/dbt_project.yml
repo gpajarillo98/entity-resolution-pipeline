@@ -1,0 +1,41 @@
+name: 'entity_resolution'
+version: '1.0.0'
+config-version: 2
+
+profile: 'entity_resolution'
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  entity_resolution:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table
+
+seeds:
+  entity_resolution:
+    +schema: raw
+    business_licenses_clean:
+      +column_types:
+        "ACCOUNT NUMBER": varchar
+        "SITE NUMBER": varchar
+        "LICENSE NUMBER": varchar
+        zip: varchar
+    food_inspections_clean:
+      +column_types:
+        "Inspection ID": varchar
+        "License #": varchar
+        zip: varchar
+    match_results:
+      +column_types:
+        inspection_id: varchar
+        account_number: varchar
+        site_number: varchar

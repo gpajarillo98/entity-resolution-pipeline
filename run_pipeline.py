@@ -32,6 +32,14 @@ def main(sample: int | None, include_facility_types: bool):
     print(f"collapsed to {len(bl_clean):,} businesses, {len(fi_clean):,} inspection records"
           + ("" if not include_facility_types else " (institutional facility types included)"))
 
+    # Written unconditionally (even on --sample runs, using the FULL
+    # cleaned data, not the sample) since these two files are also the
+    # source for the dbt seeds -- dbt/seeds needs the complete cleaned
+    # data, not whatever sample size was used for a quick local test run.
+    bl_clean.to_csv("data/processed/business_licenses_clean.csv", index=False)
+    fi_clean.to_csv("data/processed/food_inspections_clean.csv", index=False)
+    print("wrote data/processed/business_licenses_clean.csv, food_inspections_clean.csv")
+
     if sample:
         fi_clean = fi_clean.sample(sample, random_state=42).reset_index(drop=True)
         print(f"sampling {sample} inspection records for this run")

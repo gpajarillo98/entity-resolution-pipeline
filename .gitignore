@@ -24,4 +24,10 @@ dbt/dbt_packages/
 dbt/logs/
 dbt/*.duckdb
 
+# Snowflake credentials should only ever live in environment variables or
+# ~/.dbt/profiles.yml (outside the repo) -- this is a defensive backstop
+# in case a .env file ever gets created for convenience locally
+.env
+*.env
+
 .DS_Store

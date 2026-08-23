@@ -178,16 +178,20 @@ case where the matcher found zero candidates in that ZIP code at all.
 
 dbt targets **DuckDB** by default for local development — free, no
 account, no credentials, no network dependency beyond the initial
-install. A `prod` target for Snowflake is already defined in
-`profiles.yml.example`, ready for once the warehouse-loading phase of
-the roadmap is done; the model SQL itself needs no changes to run
-against either (see the `ref()` → `source()` swap noted in each staging
-model's comments once Snowflake is live).
+install. A `prod` target for Snowflake is defined in
+`profiles.yml.example`. The staging models read from
+`source('raw', <table>)` rather than `ref()` to a seed — both `dbt seed`
+(DuckDB) and `load_to_snowflake.py` (Snowflake) land data in a schema
+literally named `raw`, so the exact same model SQL runs against either
+target unchanged. (`macros/generate_schema_name.sql` is what guarantees
+the schema name is identical on both — dbt's *default* behavior would
+otherwise produce `main_raw` on DuckDB but `analytics_raw` on Snowflake,
+which would silently break the shared `source()` reference.)
 
 ```bash
 # separate venv again, same reasoning as the Airflow section
 python -m venv .venv-dbt && source .venv-dbt/bin/activate
-pip install dbt-core dbt-duckdb
+pip install dbt-core dbt-duckdb dbt-snowflake
 
 mkdir -p ~/.dbt
 cp dbt/profiles.yml.example ~/.dbt/profiles.yml
@@ -209,10 +213,10 @@ cp data/processed/match_results.csv dbt/seeds/
 cd dbt
 ```
 
-Then build and test:
+Then build and test against DuckDB (the default target):
 
 ```bash
-dbt seed           # loads the three CSVs into DuckDB
+dbt seed           # loads the three CSVs into a schema named "raw"
 dbt run            # builds stg_* views and dim_/fact_ tables
 dbt test           # runs the not_null / unique / relationships tests
 ```
@@ -220,6 +224,79 @@ dbt test           # runs the not_null / unique / relationships tests
 `dbt docs generate && dbt docs serve` opens an interactive lineage graph
 and column-level documentation in your browser — worth doing once, just
 to see the model dependency graph laid out visually.
+
+## Loading into Snowflake
+
+This is the same star schema, built against a real cloud warehouse
+instead of local DuckDB. Requires a Snowflake account (a free trial
+works fine — see below) and swaps out *how* the `raw` schema gets
+populated, without touching a single line of model SQL.
+
+### 1. Get a Snowflake account and database
+
+Sign up at [signup.snowflake.com](https://signup.snowflake.com) (free
+30-day trial). Once logged into Snowsight, note your **account
+identifier** from the browser URL (looks like `xy12345` or
+`orgname-accountname`), then run in a SQL worksheet:
+
+```sql
+CREATE DATABASE ENTITY_RESOLUTION;
+```
+
+The default `COMPUTE_WH` warehouse that ships with a trial account is
+fine to use as-is.
+
+### 2. Fill in credentials — as environment variables, never in a file
+
+```bash
+export SNOWFLAKE_ACCOUNT="xy12345"
+export SNOWFLAKE_USER="your_username"
+export SNOWFLAKE_PASSWORD="your_password"
+export SNOWFLAKE_ROLE="ACCOUNTADMIN"       # or whatever role your user has
+export SNOWFLAKE_WAREHOUSE="COMPUTE_WH"
+export SNOWFLAKE_DATABASE="ENTITY_RESOLUTION"   # optional, this is the default
+```
+
+Also fill in the matching `prod:` block in `~/.dbt/profiles.yml` (copied
+from `profiles.yml.example` earlier) with the same account/role/warehouse
+— dbt's Snowflake adapter reads the password specifically via
+`{{ env_var('SNOWFLAKE_PASSWORD') }}`, already set up in the example
+file, so the password itself never needs to be typed into `profiles.yml`.
+
+### 3. Load the raw data
+
+```bash
+# main .venv, not .venv-dbt -- this needs pandas + snowflake-connector-python
+source .venv/bin/activate
+pip install -r requirements.txt   # picks up snowflake-connector-python
+python run_pipeline.py            # regenerates data/processed/*.csv
+python load_to_snowflake.py       # loads them into Snowflake's RAW schema
+```
+
+This plays the exact same role `dbt seed` plays for DuckDB — it's the
+thing that makes `source('raw', 'business_licenses_clean')` resolve to
+real data. It's a full-refresh load (`overwrite=True`) each run, not
+incremental — reasonable for a dataset this size updated occasionally,
+but worth knowing if you extend this: a real production loader would
+likely use `MERGE`/upsert logic instead of truncate-and-reload.
+
+### 4. Build and test against Snowflake
+
+```bash
+deactivate
+source .venv-dbt/bin/activate
+cd dbt
+dbt run --target prod
+dbt test --target prod
+```
+
+Same models, same tests, same 19 checks — just running against a cloud
+warehouse instead of a local file. If this passes, the star schema now
+exists as real tables in Snowflake's `ENTITY_RESOLUTION.RAW` (source
+data) and `ENTITY_RESOLUTION.ANALYTICS` (the dbt-built
+`dim_business`/`dim_location`/`fact_license_status` tables) schemas —
+queryable directly from Snowsight or any BI tool that connects to
+Snowflake.
 
 ## Roadmap
 
@@ -236,6 +313,9 @@ to see the model dependency graph laid out visually.
 - [x] Model matched output into a star schema with dbt
       (`dim_business`, `dim_location`, `fact_license_status`, with data
       tests) — see "Running with dbt" above
-- [ ] Load into Snowflake (dbt is already wired for it — see
-      `profiles.yml.example`)
+- [x] Load into Snowflake — see "Loading into Snowflake" above.
+      `load_to_snowflake.py` lands data in a `raw` schema; staging models
+      read via `source()`, identical SQL runs against DuckDB (dev) or
+      Snowflake (prod) — see `macros/generate_schema_name.sql` for how
+      that's guaranteed
 - [ ] Lightweight dashboard on match rate / review queue

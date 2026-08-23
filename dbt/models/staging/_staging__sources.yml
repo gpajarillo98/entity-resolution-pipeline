@@ -1,0 +1,19 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Raw cleaned data landed by the pipeline, via either `dbt seed`
+      (local DuckDB dev target) or load_to_snowflake.py (Snowflake prod
+      target). Both paths land data in a schema literally named "raw"
+      with these exact table names -- see macros/generate_schema_name.sql
+      for why that's guaranteed to be true on both targets -- so every
+      staging model below works unchanged regardless of which one is active.
+    schema: raw
+    tables:
+      - name: business_licenses_clean
+        description: Cleaned Business Licenses data (see transform/clean.py).
+      - name: food_inspections_clean
+        description: Cleaned Food Inspections data (see transform/clean.py).
+      - name: match_results
+        description: Fuzzy-match output (see transform/match.py).

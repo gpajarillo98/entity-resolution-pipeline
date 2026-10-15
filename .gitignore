@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .venv/
 .venv-airflow/
+.venv-dbt/
 venv/
 
 # Airflow's own runtime files if AIRFLOW_HOME ever points inside the repo

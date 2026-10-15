@@ -24,8 +24,8 @@ is active -- that swap is the whole point of an extract layer.
 
 import pandas as pd
 
-BUSINESS_LICENSES_PATH = "data/raw/Business_Licenses_-_Current_Active_20260819.csv"
-FOOD_INSPECTIONS_PATH = "data/raw/Food_Inspections_20260819.csv"
+BUSINESS_LICENSES_PATH = "data/raw/Business_Licenses_-_Current_Active_20261015.csv"
+FOOD_INSPECTIONS_PATH = "data/raw/Food_Inspections_20261015.csv"
 
 
 def load_business_licenses(path: str = BUSINESS_LICENSES_PATH) -> pd.DataFrame:

@@ -15,6 +15,13 @@
 #
 # Run `dbt run` (uses the default target, dev) to build against DuckDB.
 # Run `dbt run --target prod` once Snowflake credentials are filled in below.
+#
+# NOTE on authentication: `prod` uses KEY-PAIR auth, not a password.
+# Snowflake now requires either MFA or key-pair authentication for
+# password-based logins, and MFA can't answer a prompt from an unattended
+# script -- key-pair is the standard, correct approach for any automated
+# pipeline, not a workaround. See README "Loading into Snowflake" for how
+# to generate a key and register it with your Snowflake user.
 
 entity_resolution:
   target: dev
@@ -27,9 +34,12 @@ entity_resolution:
 
     prod:
       type: snowflake
-      account: "<your_account_identifier>"      # e.g. xy12345.us-east-1
+      account: "<your_account_identifier>"      # e.g. ORGNAME-ACCOUNTNAME
       user: "<your_username>"
-      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"   # never hardcode this
+      private_key_path: "<path_to_rsa_key.p8>"   # e.g. ~/rsa_key.p8
+      # only needed if you generated an ENCRYPTED private key (with a
+      # passphrase) -- omit this line entirely if you used -nocrypt
+      # private_key_passphrase: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_PASSPHRASE') }}"
       role: "<your_role>"
       database: ENTITY_RESOLUTION
       warehouse: "<your_warehouse>"

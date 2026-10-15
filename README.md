@@ -246,24 +246,51 @@ CREATE DATABASE ENTITY_RESOLUTION;
 The default `COMPUTE_WH` warehouse that ships with a trial account is
 fine to use as-is.
 
-### 2. Fill in credentials — as environment variables, never in a file
+### 2. Generate a key pair and register it — not a password
+
+Snowflake now requires either MFA or key-pair authentication for
+password logins, and MFA can't answer a prompt from an unattended
+script. Key-pair auth is the standard, correct approach for any
+automated pipeline in production — not a workaround specific to this
+project.
 
 ```bash
-export SNOWFLAKE_ACCOUNT="xy12345"
+cd ~
+openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt
+openssl rsa -in rsa_key.p8 -pubout -out rsa_key.pub
+cat rsa_key.pub   # copy everything between the BEGIN/END lines
+```
+
+In a Snowsight SQL worksheet (your normal browser login is fine for this
+one interactive step):
+
+```sql
+ALTER USER your_username SET RSA_PUBLIC_KEY='<paste the key content here>';
+```
+
+`-nocrypt` generates an unencrypted key, which keeps the setup simple for
+a project like this — just keep `rsa_key.p8` private (don't commit it,
+don't share it; anyone with the file can authenticate as you). For
+extra security, drop `-nocrypt` and set a passphrase instead, then
+also set `SNOWFLAKE_PRIVATE_KEY_PASSPHRASE` below.
+
+### 3. Fill in credentials — as environment variables, never in a file
+
+```bash
+export SNOWFLAKE_ACCOUNT="xy12345"                    # or ORGNAME-ACCOUNTNAME
 export SNOWFLAKE_USER="your_username"
-export SNOWFLAKE_PASSWORD="your_password"
+export SNOWFLAKE_PRIVATE_KEY_PATH="$HOME/rsa_key.p8"
 export SNOWFLAKE_ROLE="ACCOUNTADMIN"       # or whatever role your user has
 export SNOWFLAKE_WAREHOUSE="COMPUTE_WH"
 export SNOWFLAKE_DATABASE="ENTITY_RESOLUTION"   # optional, this is the default
 ```
 
 Also fill in the matching `prod:` block in `~/.dbt/profiles.yml` (copied
-from `profiles.yml.example` earlier) with the same account/role/warehouse
-— dbt's Snowflake adapter reads the password specifically via
-`{{ env_var('SNOWFLAKE_PASSWORD') }}`, already set up in the example
-file, so the password itself never needs to be typed into `profiles.yml`.
+from `profiles.yml.example` earlier) with the same account/user/role/
+warehouse and the path to `rsa_key.p8` — already set up to use
+`private_key_path` rather than a password.
 
-### 3. Load the raw data
+### 4. Load the raw data
 
 ```bash
 # main .venv, not .venv-dbt -- this needs pandas + snowflake-connector-python
@@ -280,7 +307,7 @@ incremental — reasonable for a dataset this size updated occasionally,
 but worth knowing if you extend this: a real production loader would
 likely use `MERGE`/upsert logic instead of truncate-and-reload.
 
-### 4. Build and test against Snowflake
+### 5. Build and test against Snowflake
 
 ```bash
 deactivate
